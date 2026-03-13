@@ -81,22 +81,37 @@
         input.value = "";
     }
 
-    const q = query(mensajesCol, orderBy("fecha"));
-    onSnapshot(q, (snap) => {
-        let chatDiv = document.getElementById("chat");
-        chatDiv.innerHTML = "";
-        snap.forEach(doc => {
-            let data = doc.data();
-            let div = document.createElement("div");
-            
-            // Si el ID del mensaje es el mío, clase 'me' (derecha), si no 'remote' (izquierda)
-            div.className = "msg " + (data.sender === MI_ID ? "me" : "remote");
-            
-            div.innerHTML = `<span>${data.texto}</span> <button class="btn-descifrar" onclick="descifrar(this, '${data.texto}')">Descifrar</button>`;
+   /* LISTENER EN TIEMPO REAL CORREGIDO */
+
+const q=query(mensajesCol,orderBy("fecha"));
+
+onSnapshot(q,(snap)=>{
+
+    let chatDiv=document.getElementById("chat");
+
+    snap.docChanges().forEach((change)=>{
+
+        if(change.type==="added"){
+
+            let data=change.doc.data();
+
+            let div=document.createElement("div");
+
+            div.className="msg "+(data.sender===MI_ID?"me":"remote");
+
+            div.innerHTML=`<span>${data.texto}</span>
+            <button class="btn-descifrar" onclick="descifrar(this,'${data.texto}')">Descifrar</button>`;
+
             chatDiv.appendChild(div);
-        });
-        chatDiv.scrollTop = chatDiv.scrollHeight;
+
+            chatDiv.scrollTop=chatDiv.scrollHeight;
+
+        }
+
     });
+
+});
+
 </script>
 
 </body>
