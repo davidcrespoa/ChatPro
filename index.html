@@ -73,12 +73,18 @@
         let input = document.getElementById("texto");
         let msg = input.value.trim();
         if (msg === "") return;
-        await addDoc(mensajesCol, { 
-            texto: cifrar(msg), 
-            sender: MI_ID, // Guardamos quién envió el mensaje
-            fecha: Date.now() 
-        });
-        input.value = "";
+
+        try {
+            await addDoc(mensajesCol, { 
+                texto: cifrar(msg), 
+                sender: MI_ID,
+                fecha: Date.now() 
+            });
+            input.value = "";
+            console.log("Mensaje enviado exitosamente a Firestore.");
+        } catch (error) {
+            console.error("Error al enviar el mensaje a Firestore:", error);
+        }
     }
 
    /* LISTENER EN TIEMPO REAL CORREGIDO */
