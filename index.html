@@ -35,6 +35,10 @@ button { background: #25d366; border: none; color: white; padding: 10px 20px; bo
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+//////////////////////////////////////////////////
+// 🔥 CONFIG FIREBASE (CORRECTA)
+//////////////////////////////////////////////////
+
 const firebaseConfig = {
   apiKey: "AIzaSyC_1zQU3X8K3v4Es2mfJaOmKq0BahCYQsE",
   authDomain: "chat-secreto-7a888.firebaseapp.com",
@@ -47,9 +51,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
 //////////////////////////////////////////////////
 // 🔐 VARIABLES
 //////////////////////////////////////////////////
@@ -57,8 +58,7 @@ const db = getFirestore(app);
 let CLAVE_USUARIO = "";
 let SALA = "";
 let mensajesCol;
-
-const MI_ID = Math.random().toString(36).substring(7);
+let MI_ID = Math.random().toString(36).substring(7);
 
 //////////////////////////////////////////////////
 // 🔐 PEDIR CLAVE Y CREAR SALA
@@ -76,8 +76,9 @@ function pedirClave(){
     CLAVE_USUARIO = clave;
     SALA = clave;
 
-    // 🔥 colección dinámica por sala
     mensajesCol = collection(db, "mensajes", SALA, "chat");
+
+    iniciarListener(); // 🔥 IMPORTANTE
 }
 
 pedirClave();
@@ -130,7 +131,7 @@ async function cifrarSeguro(texto){
 }
 
 //////////////////////////////////////////////////
-// 🔓 DESCIFRAR (COMPATIBLE CON VIEJO)
+// 🔓 DESCIFRAR
 //////////////////////////////////////////////////
 
 async function descifrarSeguro(dataStr){
@@ -148,7 +149,6 @@ async function descifrarSeguro(dataStr){
         return dec.decode(decrypted);
 
     }catch(e){
-        // 🔥 fallback viejo
         if(dataStr.includes("-")){
             return dataStr.split('-').map(num=>{
                 let n=parseInt(num);
@@ -189,41 +189,44 @@ window.descifrar = async function(btn, codigo){
         let texto = await descifrarSeguro(codigo);
         btn.parentElement.innerHTML = "🔓 " + texto;
     }catch(e){
-        console.error(e);
         btn.parentElement.innerHTML = "❌ Clave incorrecta";
     }
 }
 
 //////////////////////////////////////////////////
-// 📡 TIEMPO REAL POR SALA
+// 📡 LISTENER (CORREGIDO)
 //////////////////////////////////////////////////
 
-const q = query(mensajesCol, orderBy("fecha"));
+function iniciarListener(){
 
-onSnapshot(q,(snap)=>{
-    let chat=document.getElementById("chat");
+    const q = query(mensajesCol, orderBy("fecha"));
 
-    snap.docChanges().forEach(change=>{
-        if(change.type==="added"){
+    onSnapshot(q,(snap)=>{
+        let chat=document.getElementById("chat");
 
-            let data=change.doc.data();
+        snap.docChanges().forEach(change=>{
+            if(change.type==="added"){
 
-            let div=document.createElement("div");
-            div.className="msg "+(data.sender===MI_ID?"me":"remote");
+                let data=change.doc.data();
 
-            div.innerHTML = `
-                <span>Mensaje cifrado 🔐</span>
-                <button>Descifrar</button>
-            `;
+                let div=document.createElement("div");
+                div.className="msg "+(data.sender===MI_ID?"me":"remote");
 
-            let btn = div.querySelector("button");
-            btn.onclick = () => descifrar(btn, data.texto);
+                div.innerHTML = `
+                    <span>Mensaje cifrado 🔐</span>
+                    <button>Descifrar</button>
+                `;
 
-            chat.appendChild(div);
-            chat.scrollTop=chat.scrollHeight;
-        }
+                let btn = div.querySelector("button");
+                btn.onclick = () => descifrar(btn, data.texto);
+
+                chat.appendChild(div);
+                chat.scrollTop=chat.scrollHeight;
+            }
+        });
     });
-});
+
+}
 
 </script>
 
