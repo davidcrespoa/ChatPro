@@ -133,17 +133,24 @@ window.enviar = async function(){
 }
 
 //////////////////////////////////////////////////
-// 🔓 DESCIFRAR (AUTO DETECTA)
+// 🔓 DESCIFRAR (ROBUSTO)
 //////////////////////////////////////////////////
 
 window.descifrar = async function(btn, codigo){
     try{
+        console.log("Código recibido:", codigo);
 
-        if(codigo.startsWith("{")){
+        let esJSON = false;
+        try {
+            JSON.parse(codigo);
+            esJSON = true;
+        } catch {}
+
+        if(esJSON){
             let texto = await descifrarSeguro(codigo);
             btn.parentElement.innerHTML = "🔓 " + texto;
 
-        }else{
+        } else {
             let letras = codigo.split('-').map(n=>{
                 let num=parseInt(n);
                 return isNaN(num)?n:String.fromCharCode(num+64);
@@ -153,13 +160,13 @@ window.descifrar = async function(btn, codigo){
         }
 
     }catch(e){
-        console.error(e);
+        console.error("ERROR:", e);
         btn.parentElement.innerHTML = "❌ Error al descifrar";
     }
 }
 
 //////////////////////////////////////////////////
-// 📡 LISTENER
+// 📡 LISTENER (CORREGIDO)
 //////////////////////////////////////////////////
 
 const q=query(mensajesCol,orderBy("fecha"));
@@ -173,14 +180,18 @@ onSnapshot(q,(snap)=>{
             let data=change.doc.data();
 
             let div=document.createElement("div");
-
             div.className="msg "+(data.sender===MI_ID?"me":"remote");
 
-            div.innerHTML=`
-            <span>Mensaje cifrado 🔐</span>
-            <button class="btn-descifrar" onclick="descifrar(this,'${data.texto}')">
-            Descifrar
-            </button>`;
+            // 👇 SIN onclick (evita romper JSON)
+            div.innerHTML = `
+                <span>Mensaje cifrado 🔐</span>
+                <button class="btn-descifrar">Descifrar</button>
+            `;
+
+            let btn = div.querySelector("button");
+
+            // 👇 evento correcto
+            btn.onclick = () => descifrar(btn, data.texto);
 
             chat.appendChild(div);
             chat.scrollTop=chat.scrollHeight;
