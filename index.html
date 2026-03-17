@@ -16,13 +16,13 @@ body { margin: 0; font-family: Arial; background: #e5ddd5; display: flex; flex-d
 
 .inputArea { display: flex; gap: 10px; padding: 10px; background: #f0f0f0; }
 input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ccc; }
-button { background: #25d366; border: none; color: white; padding: 10px 20px; border-radius: 20px; }
+button { background: #25d366; border: none; color: white; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
 </style>
 </head>
 
 <body>
 
-<div class="header">🔐 Chat Espía PRO - Seguro</div>
+<div class="header">🔐 Chat Espía PRO - Salas Privadas</div>
 <div id="chat" class="chat"></div>
 
 <div class="inputArea">
@@ -36,25 +36,30 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-apiKey: "AIzaSyC_1zQU3X8K3v4Es2mfJaOmKq0BahCYQsE",
-authDomain: "chat-secreto-7a888.firebaseapp.com",
-projectId: "chat-secreto-7a888",
-storageBucket: "chat-secreto-7a888.firebasestorage.app",
-messagingSenderId: "422501151882",
-appId: "1:422501151882:web:63b46bc07867b173982973"
+apiKey: "TU_API_KEY",
+authDomain: "TU_AUTH_DOMAIN",
+projectId: "TU_PROJECT_ID",
+storageBucket: "TU_BUCKET",
+messagingSenderId: "TU_ID",
+appId: "TU_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const mensajesCol = collection(db, "mensajes");
+
+//////////////////////////////////////////////////
+// 🔐 VARIABLES
+//////////////////////////////////////////////////
+
+let CLAVE_USUARIO = "";
+let SALA = "";
+let mensajesCol;
 
 const MI_ID = Math.random().toString(36).substring(7);
 
 //////////////////////////////////////////////////
-// 🔐 CLAVE REAL DEL USUARIO
+// 🔐 PEDIR CLAVE Y CREAR SALA
 //////////////////////////////////////////////////
-
-let CLAVE_USUARIO = "";
 
 function pedirClave(){
     let clave = prompt("🔐 Ingresa la clave del chat:");
@@ -66,6 +71,10 @@ function pedirClave(){
     }
 
     CLAVE_USUARIO = clave;
+    SALA = clave;
+
+    // 🔥 colección dinámica por sala
+    mensajesCol = collection(db, "mensajes", SALA, "chat");
 }
 
 pedirClave();
@@ -118,21 +127,34 @@ async function cifrarSeguro(texto){
 }
 
 //////////////////////////////////////////////////
-// 🔓 DESCIFRAR
+// 🔓 DESCIFRAR (COMPATIBLE CON VIEJO)
 //////////////////////////////////////////////////
 
 async function descifrarSeguro(dataStr){
-    const dec = new TextDecoder();
-    const key = await getKey();
-    const data = JSON.parse(dataStr);
+    try{
+        const dec = new TextDecoder();
+        const key = await getKey();
+        const data = JSON.parse(dataStr);
 
-    const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: new Uint8Array(data.iv) },
-        key,
-        new Uint8Array(data.data)
-    );
+        const decrypted = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: new Uint8Array(data.iv) },
+            key,
+            new Uint8Array(data.data)
+        );
 
-    return dec.decode(decrypted);
+        return dec.decode(decrypted);
+
+    }catch(e){
+        // 🔥 fallback viejo
+        if(dataStr.includes("-")){
+            return dataStr.split('-').map(num=>{
+                let n=parseInt(num);
+                return isNaN(n)?num:String.fromCharCode(n+64);
+            }).join('');
+        }
+
+        throw e;
+    }
 }
 
 //////////////////////////////////////////////////
@@ -156,7 +178,7 @@ window.enviar = async function(){
 }
 
 //////////////////////////////////////////////////
-// 🔓 DESCIFRAR BOTÓN
+// 🔓 BOTÓN DESCIFRAR
 //////////////////////////////////////////////////
 
 window.descifrar = async function(btn, codigo){
@@ -170,10 +192,10 @@ window.descifrar = async function(btn, codigo){
 }
 
 //////////////////////////////////////////////////
-// 📡 LISTENER
+// 📡 TIEMPO REAL POR SALA
 //////////////////////////////////////////////////
 
-const q=query(mensajesCol,orderBy("fecha"));
+const q = query(mensajesCol, orderBy("fecha"));
 
 onSnapshot(q,(snap)=>{
     let chat=document.getElementById("chat");
