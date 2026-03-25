@@ -202,15 +202,32 @@ window.enviar = async function(){
 }
 
 //////////////////////////////////////////////////
-// 🔓 BOTÓN DESCIFRAR (MODIFICADO POR EL OJO)
+//////////////////////////////////////////////////
+// 🔓 FUNCIÓN DEL OJITO INTERACTIVO (TOGGLE)
 //////////////////////////////////////////////////
 
-window.descifrar = async function(btn, codigo){
-    try{
-        let texto = await descifrarSeguro(codigo);
-        btn.parentElement.innerHTML = "🔓 " + texto;
-    }catch(e){
-        btn.parentElement.innerHTML = "❌ Clave incorrecta";
+window.toggleMensaje = async function(btn, codigoCifrado) {
+    const contenedorTexto = btn.parentElement.querySelector(".texto-msg");
+    
+    // Si ya está descifrado (no tiene los puntitos), lo volvemos a ocultar
+    if (btn.dataset.estado === "visible") {
+        contenedorTexto.innerText = "••••••••";
+        btn.innerText = "👁️";
+        btn.dataset.estado = "oculto";
+    } 
+    // Si está oculto, lo desciframos
+    else {
+        try {
+            // Si ya lo habíamos descifrado antes, lo tomamos de la memoria del botón para no procesar de nuevo
+            let textoDescifrado = btn.dataset.cache || await descifrarSeguro(codigoCifrado);
+            
+            contenedorTexto.innerText = textoDescifrado;
+            btn.innerText = "🔒"; // Cambia a candado para indicar que puedes volver a cerrar
+            btn.dataset.estado = "visible";
+            btn.dataset.cache = textoDescifrado; // Guardamos el texto para que el próximo click sea instantáneo
+        } catch(e) {
+            contenedorTexto.innerText = "❌ Error Clave";
+        }
     }
 }
 
