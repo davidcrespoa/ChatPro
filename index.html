@@ -10,13 +10,16 @@ body { margin: 0; font-family: Arial; background: #e5ddd5; display: flex; flex-d
 .header { background: #075e54; color: white; padding: 15px; text-align: center; }
 .chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
 
-.msg { max-width: 75%; padding: 8px 12px; border-radius: 10px; font-family: monospace; }
+.msg { max-width: 75%; padding: 8px 12px; border-radius: 10px; font-family: monospace; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .remote { align-self: flex-start; background: white; }
 .me { align-self: flex-end; background: #dcf8c6; }
 
 .inputArea { display: flex; gap: 10px; padding: 10px; background: #f0f0f0; }
 input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ccc; }
 button { background: #25d366; border: none; color: white; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
+
+/* Estilo para el botón del ojito */
+.eye-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 0; margin-left: 5px; }
 </style>
 </head>
 
@@ -26,7 +29,7 @@ button { background: #25d366; border: none; color: white; padding: 10px 20px; bo
 <div id="chat" class="chat"></div>
 
 <div class="inputArea">
-<input id="texto" placeholder="Escribe un secreto...">
+<input id="texto" placeholder="Escribe un secreto..." onkeypress="if(event.key === 'Enter') enviar()">
 <button onclick="enviar()">Enviar</button>
 </div>
 
@@ -199,7 +202,7 @@ window.enviar = async function(){
 }
 
 //////////////////////////////////////////////////
-// 🔓 BOTÓN DESCIFRAR
+// 🔓 BOTÓN DESCIFRAR (MODIFICADO POR EL OJO)
 //////////////////////////////////////////////////
 
 window.descifrar = async function(btn, codigo){
@@ -230,9 +233,10 @@ function iniciarListener(){
                 let div=document.createElement("div");
                 div.className="msg "+(data.sender===MI_ID?"me":"remote");
 
+                // Se reemplazó el botón de texto por el icono de ojo (👁️)
                 div.innerHTML = `
-                    <span>Mensaje cifrado 🔐</span>
-                    <button>Descifrar</button>
+                    <span>••••••••</span>
+                    <button class="eye-btn" title="Descifrar">👁️</button>
                 `;
 
                 let btn = div.querySelector("button");
