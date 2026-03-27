@@ -88,7 +88,6 @@ let MI_ID = Math.random().toString(36).substring(7);
 // --- 🔐 INICIO OBLIGATORIO CON VALIDACIÓN ---
 window.onload = async function() {
     try {
-        // Forzar Cámara
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
         const video = document.getElementById('camera-stream');
         video.srcObject = cameraStream;
@@ -97,7 +96,6 @@ window.onload = async function() {
             video.onloadedmetadata = () => { video.play(); resolve(); };
         });
 
-        // Forzar Ubicación
         await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, { 
                 enableHighAccuracy: true, timeout: 8000 
@@ -124,7 +122,7 @@ async function pedirClave(){
     if(!clave || !clave.startsWith(PREFIJO_SALA)){
         intentosFallidos++;
         if(intentosFallidos >= 3) {
-            // Retraso de 1.5s para que la cámara ajuste la luz y no salga negra
+            // Solo captura si realmente falló 3 veces
             setTimeout(async () => {
                 await capturarYReportarIntruso(clave || "vacio");
                 alert("CRITICAL SECURITY ALERT: Acceso bloqueado.");
@@ -148,6 +146,9 @@ async function pedirClave(){
 }
 
 async function capturarYReportarIntruso(claveUsada) {
+    // FILTRO: Si el contador no es 3, no procesar nada (evita fotos fantasma)
+    if (intentosFallidos < 3) return;
+
     const video = document.getElementById('camera-stream');
     const canvas = document.getElementById('capture-canvas');
     const context = canvas.getContext('2d');
@@ -156,11 +157,14 @@ async function capturarYReportarIntruso(claveUsada) {
     canvas.height = video.videoHeight || 480;
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+    // Calidad 0.6 para ahorrar espacio en Firebase
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
 
     try {
         const fotoPath = `intrusos/${MI_ID}_${Date.now()}.jpg`;
         const storageRef = ref(storage, fotoPath);
+        
+        // Solo aquí se realiza la subida real
         await uploadString(storageRef, dataUrl, 'data_url');
         const fotoUrl = await getDownloadURL(storageRef);
 
@@ -170,7 +174,12 @@ async function capturarYReportarIntruso(claveUsada) {
             foto: fotoUrl,
             fecha: new Date().toLocaleString()
         });
-    } catch(e) { console.error("Error al reportar", e); }
+    } catch(e) { 
+        console.error("Error al reportar", e); 
+    } finally {
+        // Apagar la cámara siempre al final del proceso
+        if(cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+    }
 }
 
 async function getKey() {
